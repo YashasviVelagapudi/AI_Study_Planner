@@ -51,8 +51,27 @@ st.markdown("""
     font-size: 1.1rem;
     margin-bottom: 1.8rem;
 }
+.plan-box {
+    
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f9f5ff;
+}
+
 </style>
 """, unsafe_allow_html=True)
+
+# --------------------------------------------------
+# Helper
+# --------------------------------------------------
+def render_plan_status():
+    if not st.session_state.plan_active:
+        st.info("🟡 No active plan")
+    elif st.session_state.plan_locked:
+        st.warning("🔒 Plan locked (progress started)")
+    else:
+        st.success("🟢 Active plan")
 
 # --------------------------------------------------
 # Header
@@ -66,74 +85,85 @@ st.markdown(
 # --------------------------------------------------
 # Sidebar Navigation
 # --------------------------------------------------
-st.sidebar.header("Navigation")
+st.sidebar.header("🧭 Navigation")
 page = st.sidebar.radio("Go to:", ["Home", "Progress Tracker", "About"])
 
 # ==================================================
 # HOME PAGE
 # ==================================================
 if page == "Home":
-    st.subheader("📝 Enter Your Study Details")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        name = st.text_input("👤 Your Name", value=st.session_state.name)
-        subject = st.text_input("📚 Subject Name", value=st.session_state.subject)
+    # ---------- Study Details ----------
+    with st.container():
+        st.markdown("## 📝 Study Details")
+        render_plan_status()
 
-    with col2:
-        exam_date = st.date_input(
-            "📅 Exam Date",
-            value=st.session_state.exam_date,
-            min_value=date.today()
+        col1, col2 = st.columns(2)
+        with col1:
+            name = st.text_input("👤 Your Name", value=st.session_state.name)
+            subject = st.text_input("📚 Subject Name", value=st.session_state.subject)
+
+        with col2:
+            exam_date = st.date_input(
+                "📅 Exam Date",
+                value=st.session_state.exam_date,
+                min_value=date.today()
+            )
+            hours_per_day = st.slider(
+                "⏱️ Study hours per day",
+                1, 10,
+                value=st.session_state.hours_per_day
+            )
+
+        syllabus = st.text_area(
+            "🧾 Enter your syllabus/topics (comma-separated)",
+            value=st.session_state.syllabus
         )
-        hours_per_day = st.slider(
-            "⏱️ Study hours per day",
-            1, 10,
-            value=st.session_state.hours_per_day
-        )
 
-    syllabus = st.text_area(
-        "🧾 Enter your syllabus/topics (comma-separated)",
-        value=st.session_state.syllabus
-    )
 
-    # -------------------------------
-    # Show existing plan
-    # -------------------------------
+    # ---------- Study Plan ----------
     if st.session_state.ai_plan:
-        st.write("### 📅 Your AI-Generated Study Plan")
-        st.markdown(st.session_state.ai_plan)
+        with st.container():
+            st.markdown("## 📅 Your Study Plan")
 
-        if st.session_state.plan_locked:
-            st.info("🔒 Plan is locked because progress has started.")
+            with st.container():
+                st.markdown(
+                    f"""
+                    <div class="plan-box"></div>
+                """,
+                unsafe_allow_html=True
+                )
+                st.markdown(st.session_state.ai_plan)
 
-            if st.button("🔄 Reset Plan"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.success("Plan reset. You can generate a new plan now.")
-                st.rerun()
 
-        else:
-            st.warning("⚠️ Regenerating the plan will erase all progress.")
+            if st.session_state.plan_locked:
+                st.info("🔒 Plan is locked because progress has started.")
 
-            if st.button("🔁 Regenerate Plan"):
-                st.session_state.ai_plan = None
-                st.session_state.plan_active = False
-                st.session_state.plan_locked = False
-                st.session_state.plan_topics = []
-                st.session_state.progress_data = []
-                st.success("Plan cleared. Generate a new one.")
-                st.rerun()
+                if st.button("🔄 Reset Plan"):
+                    for key in list(st.session_state.keys()):
+                        del st.session_state[key]
+                    st.rerun()
+            else:
+                st.warning("⚠️ Regenerating the plan will erase all progress.")
 
-    # -------------------------------
-    # Generate plan (single-click)
-    # -------------------------------
+                if st.button("🔁 Regenerate Plan"):
+                    st.session_state.ai_plan = None
+                    st.session_state.plan_active = False
+                    st.session_state.plan_locked = False
+                    st.session_state.plan_topics = []
+                    st.session_state.progress_data = []
+                    st.rerun()
+
+    st.markdown("---")
+
+    # ---------- Generate Plan ----------
     MODEL_NAME = "llama-3.1-8b-instant"
+    generate_disabled = st.session_state.plan_active
 
-    if st.button("✨ Generate Study Plan"):
-        if st.session_state.ai_plan:
-            st.warning("A plan already exists. Reset or regenerate it first.")
-            st.stop()
+    if generate_disabled:
+        st.info("ℹ️ Reset or regenerate the current plan to create a new one.")
+
+    if st.button("✨ Generate Study Plan", disabled=generate_disabled):
 
         if not name or not subject or not syllabus:
             st.warning("😩 Please fill in all the details.")
@@ -144,7 +174,6 @@ if page == "Home":
             st.error("Please select a valid future exam date.")
             st.stop()
 
-        # Save inputs
         st.session_state.name = name
         st.session_state.subject = subject
         st.session_state.exam_date = exam_date
@@ -158,20 +187,20 @@ if page == "Home":
 You are an expert AI study planner.
 
 Create a {days_left}-day study plan for a student named {name}.
-
 Subject: {subject}
 Topics: {syllabus}
 Daily study time: {hours_per_day} hours
-Guidelines: 
-- Structured day-by-day 
-- Practical and realistic 
-- Simple language 
-- Break topics into manageable chunks 
-- Prioritize difficult topics earlier 
-- Balance workload 
-- Include short breaks 
-- End with revision days 
-- Add light motivation and a few emojis
+ Guidelines: 
+    - Structured day-by-day 
+    - Practical and realistic 
+    - Simple language 
+    - Break topics into manageable chunks 
+    - Prioritize difficult topics earlier 
+    - Balance workload 
+    - Include short breaks 
+    - End with revision days 
+    - Add light motivation and a few emojis
+    
 """
 
             response = client.chat.completions.create(
@@ -192,12 +221,11 @@ Guidelines:
         st.success("Study plan generated successfully!")
         st.rerun()
 
-
 # ==================================================
 # PROGRESS TRACKER
 # ==================================================
 elif page == "Progress Tracker":
-    st.subheader("📊 Track Your Progress")
+    st.subheader("📊 Progress Overview")
 
     if not st.session_state.plan_active:
         st.warning("⚠️ Generate a study plan first.")
@@ -241,29 +269,14 @@ elif page == "Progress Tracker":
         if avg >= 100:
             st.success("🎉 Study plan completed!")
 
-            if st.button("🔄 Reset Plan"):
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.stop()
-
 # ==================================================
 # ABOUT PAGE
 # ==================================================
 else:
     st.subheader("ℹ️ About This App")
     st.write("""
-**AI Study Planner** helps students create personalized study schedules
+AI Study Planner helps students create personalized study schedules
 and track progress efficiently.
-
-**Tech Stack**
-- Streamlit
-- Groq (LLaMA-based models)
-- Python
-
-**Design Highlights**
-- Explicit lifecycle management
-- State-safe progress tracking
-- No silent regeneration
 """)
 
 # --------------------------------------------------
